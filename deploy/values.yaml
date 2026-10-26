@@ -1,0 +1,15 @@
+# Values for shopwise-platform/charts/laravel-service. `name` and `image` are set by the Tiltfile.
+http:
+  workers: 1
+# One consumer for all read models: every consumer shares the service's Kafka group id.
+consumers:
+  - name: read-models
+    topics: [catalog.product-published, catalog.variant-changed, pricing.price-changed]
+scheduler:
+  # Runs the outbox relay (unused: cart publishes nothing yet) and the daily guest cart prune.
+  enabled: true
+# cart owns no topics in P2.
+topics: []
+env:
+  LOG_CHANNEL: stderr
+  OCTANE_SERVER: frankenphp
