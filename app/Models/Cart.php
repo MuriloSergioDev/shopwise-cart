@@ -18,11 +18,16 @@ use Illuminate\Support\Carbon;
 use Shopwise\Kit\Auth\JwtUser;
 
 /**
- * A guest cart (customer_id null, reachable by id alone) or a customer's cart (customer_id = JWT `sub`).
+ * A guest cart (customer_id null, reachable by id alone) or a customer's cart (customer_id = JWT `sub`). A completed
+ * checkout closes a customer cart (`checked_out_at`); a closed cart is 404 everywhere and the customer gets a new one.
  *
  * @property string $id
  * @property string|null $customer_id
  * @property string|null $coupon_code
+ * @property int $version
+ * @property Carbon|null $checked_out_at
+ * @property string|null $checkout_id
+ * @property string|null $order_id
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Collection<int, CartLine> $lines
@@ -55,6 +60,22 @@ final class Cart extends Model
         return $this->customer_id === null;
     }
 
+    public function isCheckedOut(): bool
+    {
+        return $this->checked_out_at !== null;
+    }
+
+    /**
+     * Saves a change to the cart: bumps `version` in the database (so concurrent writers never share one) and
+     * `updated_at`, together with the given attributes.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function recordChange(array $attributes = []): void
+    {
+        $this->increment('version', 1, [...$attributes, 'updated_at' => $this->freshTimestamp()]);
+    }
+
     /**
      * Loads what CartResource renders: lines with their read-model names, availability and prices.
      */
@@ -64,14 +85,25 @@ final class Cart extends Model
     }
 
     /**
-     * Carts the caller may see: every guest cart, plus their own customer cart. Anything else looks unknown (404).
+     * Carts that were not checked out yet.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function open(Builder $query): void
+    {
+        $query->whereNull('checked_out_at');
+    }
+
+    /**
+     * Carts the caller may see: every guest cart, plus their own open customer cart. Anything else looks unknown (404).
      *
      * @param  Builder<self>  $query
      */
     #[Scope]
     protected function accessibleBy(Builder $query, ?JwtUser $user): void
     {
-        $query->where(function (Builder $query) use ($user): void {
+        $query->whereNull('checked_out_at')->where(function (Builder $query) use ($user): void {
             $query->whereNull('customer_id');
             if ($user instanceof JwtUser) {
                 $query->orWhere('customer_id', $user->id);
@@ -87,5 +119,10 @@ final class Cart extends Model
     public function prunable(): Builder
     {
         return self::query()->whereNull('customer_id')->where('updated_at', '<', now()->subDays(self::GUEST_TTL_DAYS));
+    }
+
+    protected function casts(): array
+    {
+        return ['version' => 'integer', 'checked_out_at' => 'datetime'];
     }
 }

@@ -15,8 +15,10 @@ final readonly class RemoveCartItem
     public function handle(Cart $cart, string $sku): Cart
     {
         return DB::transaction(function () use ($cart, $sku): Cart {
+            // Serialises with checkout closing the cart: a closed cart is not edited.
+            $cart = Cart::query()->open()->lockForUpdate()->findOrFail($cart->id);
             if ($cart->lines()->where('sku', $sku)->delete() > 0) {
-                $cart->touch();
+                $cart->recordChange();
             }
 
             return $cart->loadForDisplay();

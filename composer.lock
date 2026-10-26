@@ -4763,12 +4763,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/MuriloSergioDev/shopwise-contracts.git",
-                "reference": "cba4cfde46265e0eb74bdcb42ee510e5429dc8bd"
+                "reference": "c912dd58f0e2a1e82ed7f1e43452888307f0826d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/MuriloSergioDev/shopwise-contracts/zipball/cba4cfde46265e0eb74bdcb42ee510e5429dc8bd",
-                "reference": "cba4cfde46265e0eb74bdcb42ee510e5429dc8bd",
+                "url": "https://api.github.com/repos/MuriloSergioDev/shopwise-contracts/zipball/c912dd58f0e2a1e82ed7f1e43452888307f0826d",
+                "reference": "c912dd58f0e2a1e82ed7f1e43452888307f0826d",
                 "shasum": ""
             },
             "require": {
@@ -4789,7 +4789,7 @@
                 "source": "https://github.com/MuriloSergioDev/shopwise-contracts/tree/main",
                 "issues": "https://github.com/MuriloSergioDev/shopwise-contracts/issues"
             },
-            "time": "2026-10-26T20:30:19+00:00"
+            "time": "2026-10-26T21:54:56+00:00"
         },
         {
             "name": "shopwise/laravel-kit",

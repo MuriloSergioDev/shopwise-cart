@@ -6,10 +6,12 @@ consumers:
   - name: read-models
     topics: [catalog.product-published, catalog.variant-changed, pricing.price-changed]
 scheduler:
-  # Runs the outbox relay (unused: cart publishes nothing yet) and the daily guest cart prune.
+  # Runs the outbox relay and the daily guest cart prune.
   enabled: true
-# cart owns no topics in P2.
-topics: []
+# Topics this service owns (it is the only producer).
+topics:
+  - name: cart.cart-checked-out
+    partitions: 3
 env:
   LOG_CHANNEL: stderr
   OCTANE_SERVER: frankenphp

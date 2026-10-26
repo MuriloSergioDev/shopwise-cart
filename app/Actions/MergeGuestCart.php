@@ -23,7 +23,7 @@ final readonly class MergeGuestCart
         $customerCart = $this->openCustomerCart->handle($customerId);
 
         return DB::transaction(function () use ($customerCart, $guestCartId): Cart {
-            $customerCart = Cart::query()->lockForUpdate()->findOrFail($customerCart->id);
+            $customerCart = Cart::query()->open()->lockForUpdate()->findOrFail($customerCart->id);
             $guestCart = Cart::query()->whereNull('customer_id')->lockForUpdate()->find($guestCartId);
             if (! $guestCart instanceof Cart) {
                 return $customerCart->loadForDisplay();
@@ -39,10 +39,8 @@ final readonly class MergeGuestCart
                 }
             }
 
-            $customerCart->coupon_code ??= $guestCart->coupon_code;
-
             $guestCart->delete();
-            $customerCart->touch();
+            $customerCart->recordChange(['coupon_code' => $customerCart->coupon_code ?? $guestCart->coupon_code]);
 
             return $customerCart->loadForDisplay();
         });

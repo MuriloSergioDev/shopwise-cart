@@ -6,13 +6,14 @@ BFF asks for). Created from `shopwise-service-template`: structure, checks and h
 and still apply.
 
 ## Service facts
-- **Owns**: `carts` (`customer_id` = JWT `sub`, null for a guest cart; unique, so one cart per customer), `cart_lines` (auto-increment id = order of first add, unique per cart+SKU). Read models: `catalog_products` (a row = the product is published), `catalog_variants`, `sku_prices`. Database `cart`.
-- **Publishes**: nothing (P2).
+- **Owns**: `carts` (`customer_id` = JWT `sub`, null for a guest cart; `version`; `checked_out_at` + `checkout_id` + `order_id` once checkout closed it; a partial unique index allows one *open* cart per customer), `cart_lines` (auto-increment id = order of first add, unique per cart+SKU). Read models: `catalog_products` (a row = the product is published), `catalog_variants`, `sku_prices`. Database `cart`.
+- **Publishes** (key = cartId): `cart.cart-checked-out` when `POST /internal/carts/{id}/checked-out` closes a cart, with the lines checkout sent (`schemas/events/cart/cart-checked-out.v1.json`).
 - **Consumes** (consumer `read-models`, one deployment for all three topics):
   - `catalog.product-published` → product slug/name + its variants (active).
   - `catalog.variant-changed` → variant name + active flag; draft variants are stored and become sellable once the product is published.
   - `pricing.price-changed` → `amount`/`currency` per SKU, rendered as `unitAmount`/`currency` on lines.
-- **HTTP** (BFF only) — contract `shopwise-contracts/openapi/cart.yaml`. `POST /api/carts` (guest, public); `GET /api/me/cart`, `POST /api/me/cart/merge` (`auth.jwt`); `GET /api/carts/{id}`, `PUT|DELETE /api/carts/{id}/items/{sku}`, `PUT|DELETE /api/carts/{id}/coupon` (`auth.jwt.optional`).
+- **HTTP** (BFF only) — contract `shopwise-contracts/openapi/cart.yaml`. `POST /api/carts` (guest, public); `GET /api/me/cart`, `POST /api/me/cart/merge` (`auth.jwt`); `GET /api/carts/{id}`, `PUT|DELETE /api/carts/{id}/items/{sku}`, `PUT|DELETE /api/carts/{id}/coupon` (`auth.jwt.optional`); `GET /api/carts/{id}/snapshot` (`auth.jwt`, checkout's step 1).
+  Internal (`routes/internal.php`, prefix `/internal`, no JWT, cluster-only per ADR-0004): `POST /internal/carts/{id}/checked-out` (checkout's step 7).
 - **REST dependencies**: identity's JWKS (kit `Jwks`, `IDENTITY_JWKS_URL`) to verify customer tokens. Never calls catalog or pricing.
 - **Local URL**: http://localhost:8105 (Tilt port-forward).
 
@@ -22,6 +23,9 @@ and still apply.
 - Limits: 50 lines (422 `errors.items`), quantity 1..99. Merge adds quantities per SKU capped at 99, appends new SKUs while there is room (the rest are dropped), keeps the guest coupon only if the customer has none, deletes the guest cart, and is a no-op for an unknown or already merged guest id.
 - Read-model handlers are last-writer-wins on the event time (`changed_at`), so redeliveries and cross-topic reordering cannot roll state back. Variants are keyed by SKU (catalog never reuses or changes one).
 - Coupon codes are stored uppercased and not validated here.
+- Every change goes through `Cart::recordChange()`, which bumps `version` in the database (and `updated_at`). Edits lock the open cart (`Cart::open()`), so they serialise with closing it.
+- Snapshot: only the caller's open customer cart; guest, closed or someone else's cart is 404, no token 401.
+- Closing (`App\Actions\CheckOutCart`) is idempotent per `checkoutId`: a repeat is 200 with no second event; a different checkoutId is 409; unknown or guest cart is 404. Response is 200 with no body. A closed cart is 404 everywhere (`accessibleBy` excludes it), its lines are kept, and `GET /api/me/cart` opens a new cart.
 - `GET /api/me/cart` answers 200 even when it created the cart.
 
 ## Data
