@@ -20,6 +20,7 @@ final readonly class SetCartItem
         return DB::transaction(function () use ($cart, $item): Cart {
             // Serialises writers of the same cart, so the line limit holds.
             $cart = Cart::query()->open()->lockForUpdate()->findOrFail($cart->id);
+            $cart->ensureUnlocked();
 
             $variant = CatalogVariant::query()->with('product')->where('sku', $item->sku)->first();
             if (! $variant instanceof CatalogVariant || ! $variant->isForSale()) {

@@ -17,7 +17,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 final class CartResource extends JsonResource
 {
     /**
-     * @return array{id: string, owner: string, couponCode: string|null, lines: list<array{sku: string, quantity: int, productSlug: string|null, productName: string|null, variantName: string, available: bool, unitAmount: int|null, currency: string|null}>, updatedAt: string}
+     * @return array{id: string, owner: string, couponCode: string|null, lines: list<array{sku: string, quantity: int, productSlug: string|null, productName: string|null, variantName: string, available: bool, unitAmount: int|null, currency: string|null}>, updatedAt: string, lockedByCheckoutId: string|null}
      */
     public function toArray(Request $request): array
     {
@@ -37,6 +37,7 @@ final class CartResource extends JsonResource
                 'currency' => $line->price?->currency,
             ])->all()),
             'updatedAt' => $this->updated_at->toIso8601ZuluString(),
+            'lockedByCheckoutId' => $this->locked_by_checkout_id,
         ];
     }
 }

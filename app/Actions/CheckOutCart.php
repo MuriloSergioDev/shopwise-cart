@@ -14,8 +14,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 /**
  * Closes a customer cart after checkout placed the order (ADR-0004 step 7) and records cart.cart-checked-out with
  * the snapshot's lines. Idempotent per checkout: closing it again with the same checkoutId changes nothing and
- * records no second event; a different checkoutId is a conflict. Guest carts are unknown (404): guests cannot
- * check out.
+ * records no second event; a cart closed or locked by a different checkout is a conflict. Closing ends the lock.
+ * Guest carts are unknown (404): guests cannot check out.
  */
 final readonly class CheckOutCart
 {
@@ -36,8 +36,12 @@ final readonly class CheckOutCart
                 return $cart;
             }
 
+            if ($cart->locked_by_checkout_id !== null && $cart->locked_by_checkout_id !== $checkoutId) {
+                throw new ConflictHttpException("Cart {$cartId} is locked by another checkout.");
+            }
+
             $checkedOutAt = now();
-            $cart->recordChange(['checked_out_at' => $checkedOutAt, 'checkout_id' => $checkoutId, 'order_id' => $orderId]);
+            $cart->recordChange(['checked_out_at' => $checkedOutAt, 'checkout_id' => $checkoutId, 'order_id' => $orderId, 'locked_by_checkout_id' => null]);
 
             $event = new CartCheckedOutV1(
                 cartId: $cart->id,

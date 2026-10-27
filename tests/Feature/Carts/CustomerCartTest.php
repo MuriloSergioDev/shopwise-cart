@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use App\Models\Cart;
 
-it('creates the customer cart on first access and returns the same one afterwards', function (): void {
-    $first = $this->getJson('/api/me/cart', bearer())->assertOk()
+it('creates the customer cart on first access (201) and returns the same one afterwards (200)', function (): void {
+    $first = $this->getJson('/api/me/cart', bearer())->assertCreated()
         ->assertJsonPath('data.owner', 'customer')
         ->assertJsonPath('data.lines', [])
         ->assertJsonPath('data.couponCode', null);

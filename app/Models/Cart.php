@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Exceptions\CartLocked;
 use Database\Factories\CartFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -28,11 +29,12 @@ use Shopwise\Kit\Auth\JwtUser;
  * @property Carbon|null $checked_out_at
  * @property string|null $checkout_id
  * @property string|null $order_id
+ * @property string|null $locked_by_checkout_id
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Collection<int, CartLine> $lines
  */
-#[Fillable(['customer_id', 'coupon_code'])]
+#[Fillable(['customer_id', 'coupon_code', 'locked_by_checkout_id'])]
 final class Cart extends Model
 {
     /** @use HasFactory<CartFactory> */
@@ -40,6 +42,13 @@ final class Cart extends Model
 
     use HasUlids;
     use MassPrunable;
+
+    /**
+     * Column defaults, so a cart created in this request renders without a reload.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = ['version' => 0, 'locked_by_checkout_id' => null];
 
     public const int MAX_LINES = 50;
 
@@ -63,6 +72,18 @@ final class Cart extends Model
     public function isCheckedOut(): bool
     {
         return $this->checked_out_at !== null;
+    }
+
+    /**
+     * Refuses a change while a checkout holds the cart's lock. Call it on a row locked for update.
+     *
+     * @throws CartLocked
+     */
+    public function ensureUnlocked(): void
+    {
+        if ($this->locked_by_checkout_id !== null) {
+            throw new CartLocked($this->locked_by_checkout_id);
+        }
     }
 
     /**

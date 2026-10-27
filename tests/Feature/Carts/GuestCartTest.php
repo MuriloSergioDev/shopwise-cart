@@ -14,6 +14,7 @@ it('creates an empty guest cart', function (): void {
         'couponCode' => null,
         'lines' => [],
         'updatedAt' => $cart->updated_at->toIso8601ZuluString(),
+        'lockedByCheckoutId' => null,
     ]]);
     expect($cart->customer_id)->toBeNull();
 });

@@ -17,7 +17,9 @@ final class ShowCustomerCartController
         $user = $request->user();
         abort_unless($user instanceof JwtUser, 401);
 
-        // 200 even when this request created the cart: the contract treats creation as an implementation detail.
-        return CartResource::make($openCustomerCart->handle($user->id)->loadForDisplay())->response()->setStatusCode(200);
+        $cart = $openCustomerCart->handle($user->id);
+
+        // 201 when this request created the cart (first access, or the last one was checked out).
+        return CartResource::make($cart->loadForDisplay())->response()->setStatusCode($cart->wasRecentlyCreated ? 201 : 200);
     }
 }

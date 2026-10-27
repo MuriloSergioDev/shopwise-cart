@@ -15,8 +15,9 @@ final readonly class SetCartCoupon
     public function handle(Cart $cart, ?string $code): Cart
     {
         return DB::transaction(function () use ($cart, $code): Cart {
-            // Serialises with checkout closing the cart: a closed cart is not edited.
+            // Serialises with checkout locking and closing the cart: a locked or closed cart is not edited.
             $cart = Cart::query()->open()->lockForUpdate()->findOrFail($cart->id);
+            $cart->ensureUnlocked();
             $cart->recordChange(['coupon_code' => $code === null ? null : mb_strtoupper($code)]);
 
             return $cart->loadForDisplay();

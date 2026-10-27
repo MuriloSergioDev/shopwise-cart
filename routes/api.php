@@ -11,12 +11,15 @@ use App\Http\Controllers\SetCartItemController;
 use App\Http\Controllers\ShowCartController;
 use App\Http\Controllers\ShowCartSnapshotController;
 use App\Http\Controllers\ShowCustomerCartController;
+use App\Http\Controllers\TakeCartSnapshotController;
 use Illuminate\Support\Facades\Route;
 
 // Called only by the BFFs. Contract: shopwise-contracts/openapi/cart.yaml.
 Route::post('/carts', CreateGuestCartController::class)->name('carts.store');
 
 // Checkout's copy of the caller's customer cart (ADR-0004 step 1). Guests cannot check out, so a token is required.
+// POST also locks the cart for the checkout; GET is deprecated and takes no lock.
+Route::post('/carts/{cartId}/snapshot', TakeCartSnapshotController::class)->middleware('auth.jwt')->name('carts.snapshot.store');
 Route::get('/carts/{cartId}/snapshot', ShowCartSnapshotController::class)->middleware('auth.jwt')->name('carts.snapshot');
 
 Route::middleware('auth.jwt')->prefix('me/cart')->name('me.cart.')->group(function (): void {

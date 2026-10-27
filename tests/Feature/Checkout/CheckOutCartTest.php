@@ -25,10 +25,15 @@ function checkedOutBody(array $overrides = []): array
 
 it('closes the cart and records cart.cart-checked-out with the snapshot\'s lines', function (): void {
     Date::setTestNow('2026-10-26T12:01:25Z');
-    // The cart gained a line after the snapshot: it is dropped with the cart.
+    // A line that is not in the snapshot's lines is dropped with the cart.
     $cart = Cart::factory()->ownedBy(CUSTOMER_ID)->withLines(['TEE-MER-BLK-M' => 2, 'MUG-BLK' => 1])->create();
 
-    $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk()->assertNoContent(200);
+    $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk()->assertExactJson(['data' => [
+        'cartId' => $cart->id,
+        'checkoutId' => CHECKOUT_ID,
+        'orderId' => '01JBCDEFGHJKMNPQRSTVWXYZ44',
+        'closedAt' => '2026-10-26T12:01:25Z',
+    ]]);
 
     $cart->refresh();
     expect($cart->isCheckedOut())->toBeTrue()
@@ -50,11 +55,12 @@ it('closes the cart and records cart.cart-checked-out with the snapshot\'s lines
         ]);
 });
 
-it('is idempotent per checkout: a repeat is 200 without a second event', function (): void {
+it('is idempotent per checkout: a repeat is 200 with the same body and no second event', function (): void {
     $cart = Cart::factory()->ownedBy(CUSTOMER_ID)->create();
 
-    $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk();
-    $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk();
+    $first = $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk();
+    $this->travel(5)->minutes();
+    $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk()->assertExactJson($first->json());
 
     expect(OutboxMessage::query()->count())->toBe(1)
         ->and($cart->refresh()->version)->toBe(1);
@@ -111,7 +117,7 @@ it('gives the customer a fresh cart after checkout, and merges guest carts into 
     $cart = Cart::factory()->ownedBy(CUSTOMER_ID)->withLines(['TEE-MER-BLK-M' => 2])->create();
     $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk();
 
-    $fresh = $this->getJson('/api/me/cart', bearer())->assertOk()->assertJsonPath('data.lines', []);
+    $fresh = $this->getJson('/api/me/cart', bearer())->assertCreated()->assertJsonPath('data.lines', []);
     expect($fresh->json('data.id'))->not->toBe($cart->id);
 
     $guest = Cart::factory()->withLines(['MUG-BLK' => 1])->create();
@@ -128,4 +134,16 @@ it('takes no access token: internal routes are cluster-only', function (): void 
 
     // Even a bad bearer header is ignored rather than rejected.
     $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody(), ['Authorization' => 'Bearer nonsense'])->assertOk();
+});
+
+it('closes a cart locked by the same checkout and ends the lock, but refuses another checkout\'s lock', function (): void {
+    $cart = Cart::factory()->ownedBy(CUSTOMER_ID)->create(['locked_by_checkout_id' => CHECKOUT_ID]);
+    $other = Cart::factory()->ownedBy('01JBCDEFGHJKMNPQRSTVWXYZ55')->create(['locked_by_checkout_id' => 'ANOTHER-CHECKOUT']);
+
+    $this->postJson("/internal/carts/{$cart->id}/checked-out", checkedOutBody())->assertOk();
+    $this->postJson("/internal/carts/{$other->id}/checked-out", checkedOutBody())->assertConflict();
+
+    expect($cart->refresh()->locked_by_checkout_id)->toBeNull()
+        ->and($other->refresh()->isCheckedOut())->toBeFalse()
+        ->and(OutboxMessage::query()->count())->toBe(1);
 });
